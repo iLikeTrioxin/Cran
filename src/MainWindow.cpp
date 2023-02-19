@@ -25,14 +25,17 @@ void MainWindow::closeTracker(CameraTrackerWindow* window){
             std::string cameraName = window->tracker->camera->name;
             std::string cameraDesc = camerasUsed.at(cameraName);
             std::string cameraLabel = cameraName + " - " + cameraDesc;
+
             cameraTrackerWindows[i].first->quit();
             cameraTrackerWindows[i].first->wait();
+
             delete cameraTrackerWindows[i].first;
             delete cameraTrackerWindows[i].second;
+
             cameraTrackerWindows.erase(cameraTrackerWindows.begin() + i);
             multiCameraTracker.removeTracker(i);
             ui->cameraAddSelect->addItem(cameraLabel.c_str());
-            camerasAvailable.push_back({cameraName.c_str(), cameraDesc.c_str()});
+            camerasAvailable.emplace_back(cameraName.c_str(), cameraDesc.c_str());
             camerasUsed.erase(cameraName);
             onCurrentIndexChanged(0);
             break;
@@ -43,11 +46,16 @@ void MainWindow::closeTracker(CameraTrackerWindow* window){
 void MainWindow::addCamera(){
     std::cout<<"added camera\n";
 
-    Cranel::CameraTracker* tracker = new Cranel::CameraTracker(previewCam);
+    onCurrentIndexChanged(ui->cameraAddSelect->currentIndex());
+//    ui->cameraAddSelect->setCurrentIndex(ui->cameraAddSelect->currentIndex());
+    if(previewCam == nullptr) return;
+
+    auto* tracker = new Cranel::CameraTracker(previewCam);
     tracker = multiCameraTracker.addTracker(tracker);
 
-    QThread* thread = new QThread();
-    Worker* worker = new Worker(new CameraTrackerWindow(this, tracker), this);
+    auto* window = new CameraTrackerWindow(this, tracker);
+    auto* thread = new QThread();
+    auto* worker = new Worker(window, this);
 
     worker->moveToThread(thread);
     QObject::connect(thread, &QThread::started, worker, &Worker::process);
@@ -61,17 +69,29 @@ void MainWindow::addCamera(){
     ui->cameraAddSelect->removeItem(ui->cameraAddSelect->currentIndex());
 }
 
+void MainWindow::showNoCamerasScreen(){
+    previewCam = nullptr;
+    ui->cameraPreview->setPixmap(cvMatToQPixmap(cv::imread("./NoCamera.jpg", cv::IMREAD_GRAYSCALE)));
+}
+
 void MainWindow::onCurrentIndexChanged(int index){
     delete previewCam;
 
-    if(index == -1) return;
+    const auto& camera = camerasAvailable[index];
 
-    auto camera = camerasAvailable[index];
+    const auto name = camera.second.toLower();
+    const auto path = camera.first.toStdString();
 
-    if(camera.second.toLower().contains("xbox"))
-        previewCam = new Cranel::KinectCamera(camera.first.toStdString());
-    else
-        previewCam = new Cranel::OpenCVCamera(camera.first.toStdString());
+    using namespace Cranel;
+
+    try {
+        if (name.contains("xbox")) { previewCam = new KinectCamera(path); return; }
+
+        previewCam = new OpenCVCamera(path);
+    } catch(...) {
+        std::cout<<"could not load camera\n";
+        showNoCamerasScreen();
+    }
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -80,16 +100,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     QList<QCameraInfo> camerasList = QCameraInfo::availableCameras();
     foreach (const QCameraInfo &cameraInfo, camerasList) {
-            camerasAvailable.push_back({cameraInfo.deviceName(), cameraInfo.description()});
+        camerasAvailable.emplace_back(cameraInfo.deviceName(), cameraInfo.description());
         ui->cameraAddSelect->addItem(cameraInfo.deviceName() + " - " + cameraInfo.description());
     }
+
 //    onCurrentIndexChanged(0);
 
     // populate your window with images, labels, etc. here
     connect(ui->cameraAddSelect, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &MainWindow::onCurrentIndexChanged);
     connect(ui->cameraAddSubmit, &QPushButton::pressed, this, &MainWindow::addCamera);
     connect(&_timer, SIGNAL(timeout()), this, SLOT(on_timeout()));
-
 
     _timer.start(10 /*call the timer every 10 ms*/);
 }

@@ -7,8 +7,6 @@ namespace Cranel {
     public:
         explicit OpenCVCamera(const std::string &file);
 
-        explicit OpenCVCamera(int id);
-
         void nextFrame() override;
 
         ~OpenCVCamera() override = default;

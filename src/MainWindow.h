@@ -34,7 +34,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
     void addCamera();
-
+    void showNoCamerasScreen();
 private:
     Ui::MainWindow *ui = nullptr;
 
